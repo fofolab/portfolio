@@ -6,6 +6,11 @@ on:
       - main
     paths:
       - "app-v2/**"
+      - "PJ*/**"
+      - "logo/**"
+      - "个人简介/**"
+      - "项目封面（方形）/**"
+      - "分享图/**"
       - ".github/workflows/deploy-app-v2.yml"
   workflow_dispatch:
 

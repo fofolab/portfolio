@@ -55,8 +55,8 @@ const collator = new Intl.Collator("zh-Hans-CN", {
 const coverLogoFrames = Object.entries(coverLogoFrameModules)
   .sort(([pathA], [pathB]) => collator.compare(getFileNameFromPath(pathA), getFileNameFromPath(pathB)))
   .map(([, url]) => url);
-const COVER_LOGO_FPS = 60;
-const COVER_LOGO_INITIAL_PRELOAD = 42;
+const COVER_LOGO_FPS = 30;
+const COVER_LOGO_INITIAL_PRELOAD = 30;
 
 const optimizedIntroAssets = Object.entries(optimizedIntroModules).sort(([pathA], [pathB]) =>
   collator.compare(getFileNameFromPath(pathA), getFileNameFromPath(pathB))
