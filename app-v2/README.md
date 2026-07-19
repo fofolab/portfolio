@@ -38,6 +38,7 @@ dist
 - V2.0 is the current final release version.
 - V1.0 is preserved separately and should not be overwritten.
 - The cover uses the final logo animation and reveals the supporting cover text after playback.
+- GitHub Pages deployment is handled from the `app-v2` build output.
 
 ## GitHub Pages
 
