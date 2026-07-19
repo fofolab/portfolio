@@ -242,6 +242,7 @@ button {
   object-fit: contain;
   background: transparent;
   mix-blend-mode: screen;
+  transform: translateX(8%);
 }
 
 .coverRevealItem {
