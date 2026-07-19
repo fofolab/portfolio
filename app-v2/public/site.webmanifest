@@ -1,0 +1,16 @@
+{
+  "name": "fofola",
+  "short_name": "fofola",
+  "description": "Let's make something vivid.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

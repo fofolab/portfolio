@@ -1,0 +1,8 @@
+node_modules
+dist
+.pnpm-store
+.DS_Store
+app/node_modules
+app/dist
+app/.pnpm-store
+app/.pnpm-store-root-cache
