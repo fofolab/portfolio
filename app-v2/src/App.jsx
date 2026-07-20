@@ -56,7 +56,7 @@ const coverLogoFrames = Object.entries(coverLogoFrameModules)
   .sort(([pathA], [pathB]) => collator.compare(getFileNameFromPath(pathA), getFileNameFromPath(pathB)))
   .map(([, url]) => url);
 const COVER_LOGO_FPS = 30;
-const COVER_LOGO_INITIAL_PRELOAD = 30;
+const COVER_LOGO_INITIAL_PRELOAD = 12;
 
 const optimizedIntroAssets = Object.entries(optimizedIntroModules).sort(([pathA], [pathB]) =>
   collator.compare(getFileNameFromPath(pathA), getFileNameFromPath(pathB))
@@ -256,6 +256,11 @@ function EyeTracker({ className = "" }) {
 
 function preloadImage(src) {
   return new Promise((resolve) => {
+    if (!src) {
+      resolve();
+      return;
+    }
+
     const image = new Image();
     image.decoding = "async";
     image.onload = resolve;
@@ -266,6 +271,77 @@ function preloadImage(src) {
       image.decode().then(resolve).catch(resolve);
     }
   });
+}
+
+function preloadVideo(src) {
+  return new Promise((resolve) => {
+    if (!src) {
+      resolve();
+      return;
+    }
+
+    const video = document.createElement("video");
+    let hasResolved = false;
+    const resolveOnce = () => {
+      if (hasResolved) return;
+      hasResolved = true;
+      video.removeAttribute("src");
+      video.load();
+      resolve();
+    };
+
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    video.addEventListener("loadeddata", resolveOnce, { once: true });
+    video.addEventListener("error", resolveOnce, { once: true });
+    window.setTimeout(resolveOnce, 1800);
+    video.src = src;
+    video.load();
+  });
+}
+
+function uniqueAssets(assets) {
+  return [...new Set(assets.filter(Boolean))];
+}
+
+function BootLoader({ progress, isLeaving }) {
+  const progressValue = Math.max(0.04, Math.min(progress, 1));
+
+  return (
+    <div
+      className={`bootLoader ${isLeaving ? "bootLoader--leaving" : ""}`}
+      aria-label="Loading fofola"
+      aria-live="polite"
+    >
+      <div className="bootLoaderCenter">
+        <EyeTracker className="eyeTracker--loader" />
+        <p className="bootLoaderText">
+          loading<span aria-hidden="true">.</span><span aria-hidden="true">.</span><span className="bootLoaderBlink" aria-hidden="true">.</span>
+        </p>
+      </div>
+
+      <div className="bootProgress" aria-hidden="true">
+        <span style={{ transform: `scaleX(${progressValue})` }} />
+      </div>
+    </div>
+  );
+}
+
+function runIdleTask(task, timeout = 900) {
+  if ("requestIdleCallback" in window) {
+    return window.requestIdleCallback(task, { timeout });
+  }
+
+  return window.setTimeout(task, 120);
+}
+
+function cancelIdleTask(id) {
+  if ("cancelIdleCallback" in window) {
+    window.cancelIdleCallback(id);
+  } else {
+    window.clearTimeout(id);
+  }
 }
 
 function Cover({ onEnter }) {
@@ -345,7 +421,7 @@ function Cover({ onEnter }) {
     };
 
     Promise.race([
-      Promise.all(coverLogoFrames.slice(1, 18).map(preloadImage)),
+      Promise.all(coverLogoFrames.slice(1, COVER_LOGO_INITIAL_PRELOAD).map(preloadImage)),
       new Promise((resolve) => window.setTimeout(resolve, 520)),
     ]).then(startAnimation);
 
@@ -1012,6 +1088,8 @@ function ProjectOverlay({ project, images, initialIndex = 0, onClose }) {
 }
 
 export default function App() {
+  const [bootState, setBootState] = useState("loading");
+  const [bootProgress, setBootProgress] = useState(0);
   const [hasEntered, setHasEntered] = useState(false);
   const [activeView, setActiveView] = useState("intro");
   const [shouldPauseIntroExit, setShouldPauseIntroExit] = useState(false);
@@ -1027,6 +1105,80 @@ export default function App() {
       })),
     []
   );
+
+  useEffect(() => {
+    let isCancelled = false;
+    const criticalAssets = uniqueAssets([
+      eyeVideo,
+      logoWhite,
+      ...coverLogoFrames,
+      portraitImage,
+      ...introLogos,
+    ]);
+    const totalAssets = Math.max(criticalAssets.length, 1);
+    let completedAssets = 0;
+    const startedAt = performance.now();
+
+    const markComplete = () => {
+      completedAssets += 1;
+      if (!isCancelled) {
+        setBootProgress(completedAssets / totalAssets);
+      }
+    };
+
+    const loadAsset = (asset) => {
+      const loader = /\.(mp4|mov|webm)(\?|$)/i.test(asset) ? preloadVideo : preloadImage;
+      return loader(asset).then(markComplete);
+    };
+
+    Promise.all(criticalAssets.map(loadAsset)).then(() => {
+      const elapsed = performance.now() - startedAt;
+      const finishDelay = Math.max(0, 760 - elapsed);
+
+      window.setTimeout(() => {
+        if (isCancelled) return;
+        setBootProgress(1);
+        setBootState("leaving");
+
+        window.setTimeout(() => {
+          if (!isCancelled) setBootState("done");
+        }, 520);
+      }, finishDelay);
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (bootState !== "done") return undefined;
+
+    let isCancelled = false;
+    let idleId = 0;
+    const queuedProjectAssets = uniqueAssets([
+      ...enrichedProjects.map((project) => project.cover),
+      ...enrichedProjects.map((project) => project.images[0]),
+      ...enrichedProjects.flatMap((project) => project.images),
+    ]);
+    let assetIndex = 0;
+
+    const loadNextProjectAsset = () => {
+      if (isCancelled || assetIndex >= queuedProjectAssets.length) return;
+      const asset = queuedProjectAssets[assetIndex];
+      assetIndex += 1;
+      preloadImage(asset).finally(() => {
+        if (!isCancelled) idleId = runIdleTask(loadNextProjectAsset, 1200);
+      });
+    };
+
+    idleId = runIdleTask(loadNextProjectAsset, 1100);
+
+    return () => {
+      isCancelled = true;
+      if (idleId) cancelIdleTask(idleId);
+    };
+  }, [bootState, enrichedProjects]);
 
   const openProject = useCallback(
     (project, initialImageIndex = 0) => {
@@ -1077,7 +1229,9 @@ export default function App() {
 
   return (
     <>
-      {!hasEntered ? (
+      {bootState !== "done" ? (
+        <BootLoader progress={bootProgress} isLeaving={bootState === "leaving"} />
+      ) : !hasEntered ? (
         <Cover onEnter={enterSite} />
       ) : (
         <Home
